@@ -2,7 +2,7 @@ import os, json, re, time, urllib.request, urllib.parse, xml.etree.ElementTree a
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 NAMES=["The Diary of a CEO","The Joe Rogan Experience","The Rest Is History","The Daily","The Mel Robbins Podcast","Good Hang with Amy Poehler","Crime Junkie","Dateline NBC","The Shawn Ryan Show","This Past Weekend with Theo Von"]
-FEEDS={0:"https://rss2.flightcast.com/xmsftuzjjykcmqwolaqn6mdn",2:"https://feeds.megaphone.fm/GLT4787413333",3:"https://feeds.simplecast.com/Sl5CSM3S",4:"https://feeds.simplecast.com/UCwaTX1J",6:"https://feeds.simplecast.com/qm_9xx0g"}
+FEEDS={0:"https://rss2.flightcast.com/xmsftuzjjykcmqwolaqn6mdn",2:"https://feeds.megaphone.fm/GLT4787413333",3:"https://feeds.simplecast.com/Sl5CSM3S",4:"https://feeds.simplecast.com/UCwaTX1J",6:"https://feeds.simplecast.com/qm_9xx0g",9:"https://feeds.megaphone.fm/thispastweekend"}
 CACHE={}
 def fetch(url):
     req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 EchoPod/1.0","Accept":"*/*"})
@@ -64,14 +64,14 @@ def covers():
         for i,name in enumerate(NAMES):
             art=""; apple=""; publisher=""
             try:
-                u="https://itunes.apple.com/search?"+urllib.parse.urlencode({"term":name,"entity":"podcast","limit":12,"country":"us"})
+                u=("https://itunes.apple.com/lookup?id=1190981360" if i==9 else "https://itunes.apple.com/search?"+urllib.parse.urlencode({"term":name,"entity":"podcast","limit":12,"country":"us"}))
                 results=json.loads(fetch(u)).get("results",[])
                 def score(x):
                     n=x.get("collectionName","").lower(); q=name.lower()
                     return (100 if n==q else 50 if q in n else 20 if n in q else 0)+(2 if "podcast" in x.get("kind","") else 0)
                 if results:
                     match=max(results,key=score)
-                    if score(match)>=20:
+                    if i==9 or score(match)>=20:
                         art=match.get("artworkUrl600") or match.get("artworkUrl100") or ""
                         apple=match.get("collectionViewUrl","")
                         publisher=match.get("artistName","")
