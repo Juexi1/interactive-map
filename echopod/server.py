@@ -1,4 +1,5 @@
 import os, json, re, time, urllib.request, urllib.parse, xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 NAMES=["The Diary of a CEO","The Joe Rogan Experience","The Rest Is History","The Daily","The Mel Robbins Podcast","Good Hang with Amy Poehler","Crime Junkie","Dateline NBC","The Shawn Ryan Show","This Past Weekend with Theo Von"]
@@ -9,7 +10,7 @@ def fetch(url):
     with urllib.request.urlopen(req,timeout=14) as res:return res.read(8000000)
 def cache(k,fn):
     old=CACHE.get(k)
-    if old and time.time()-old[0]<900:return old[1]
+    if old and time.time()-old[0]<3600:return old[1]
     x=fn();CACHE[k]=(time.time(),x);return x
 def local(el,tag):
     for c in el:
@@ -55,13 +56,13 @@ function setFocus(){if(art[chosen])$('focusArt').src=art[chosen];else $('focusAr
 async function select(i){chosen=i;latest=[];draw();setFocus();$('loading').textContent='Loading episodes…';$('count').textContent='';$('episodes').replaceChildren();try{const r=await fetch('/api/episodes/'+i);const d=await r.json();latest=d.episodes||[];if(!latest.length){$('loading').textContent='Unavailable';const e=document.createElement('p');e.className='error';e.textContent='Could not load episodes. '+(d.errors||[]).join(' · ');$('episodes').append(e);return}$('loading').textContent='Updated from RSS';$('count').textContent=latest.length+' available episodes';latest.forEach((e,j)=>{const row=document.createElement('div');row.className='episode';const idx=document.createElement('div');idx.className='n';idx.textContent=String(j+1).padStart(2,'0');const info=document.createElement('div');info.className='details';const t=document.createElement('div');t.className='title';t.textContent=e.title;const m=document.createElement('div');m.className='meta';m.textContent=e.date||'Latest episode';info.append(t,m);const play=document.createElement('button');play.className='epbtn';play.textContent='▶';play.setAttribute('aria-label','Play '+e.title);play.onclick=()=>playEpisode(e);row.append(idx,info,play);$('episodes').append(row)})}catch(e){$('loading').textContent='Connection failed';$('episodes').textContent=e.message}}
 function playEpisode(e){$('audio').src=e.audio;$('playing').textContent=e.title;$('audio').play().catch(()=>{})}
 async function morning(){await select(3);if(latest[0])playEpisode(latest[0]);$('episodes').scrollIntoView({behavior:'smooth'})}
-draw();select(3);getCovers();if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+draw();setFocus();$('loading').textContent='Choose a podcast to fetch episodes';$('episodes').innerHTML='<p class="subtle">Select any podcast above to load its latest episodes. Feeds refresh on demand and are cached for one hour.</p>';getCovers();if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 </script></body></html>""".replace("__SHOWS__",json.dumps(NAMES))
 SW=b"self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>self.clients.claim());"
 def covers():
     def obtain():
-        output=[]
-        for i,name in enumerate(NAMES):
+        def one(pair):
+            i,name=pair
             art=""; apple=""; publisher=""
             try:
                 u=("https://itunes.apple.com/lookup?id=1190981360" if i==9 else "https://itunes.apple.com/search?"+urllib.parse.urlencode({"term":name,"entity":"podcast","limit":12,"country":"us"}))
@@ -76,18 +77,10 @@ def covers():
                         apple=match.get("collectionViewUrl","")
                         publisher=match.get("artistName","")
             except Exception:pass
-            if not art and i in FEEDS:
-                try:
-                    root=ET.fromstring(fetch(FEEDS[i]))
-                    for e in root.findall("./channel"):
-                        for node in e:
-                            if node.tag.split("}")[-1]=="image":
-                                art=node.get("href","") or local(node,"url")
-                                if art:break
-                except Exception:pass
-            output.append({"name":name,"art":art,"apple":apple,"publisher":publisher})
-        return output
-    return cache("covers_v2",obtain)
+            return {"name":name,"art":art,"apple":apple,"publisher":publisher}
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            return list(pool.map(one,enumerate(NAMES)))
+    return cache("covers_v3",obtain)
 
 class Handler(BaseHTTPRequestHandler):
     def reply(self,v,typ="application/json",status=200):
