@@ -1,5 +1,5 @@
 import os, json, re, time, urllib.request, urllib.parse, urllib.error, xml.etree.ElementTree as ET
-import hmac, datetime
+import hmac, datetime, threading, math
 from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -7,6 +7,7 @@ NAMES=["The Diary of a CEO","The Joe Rogan Experience","The Rest Is History","Th
 FEEDS={0:"https://rss2.flightcast.com/xmsftuzjjykcmqwolaqn6mdn",2:"https://feeds.megaphone.fm/GLT4787413333",3:"https://feeds.simplecast.com/Sl5CSM3S",4:"https://feeds.simplecast.com/UCwaTX1J",6:"https://feeds.simplecast.com/qm_9xx0g",9:"https://feeds.megaphone.fm/thispastweekend",10:"https://feeds.npr.org/510318/podcast.xml",11:"https://feeds.fireside.fm/sheng-espresso/rss"}
 CACHE={}
 AI_DAILY={}
+AI_LOCK=threading.Lock()
 def fetch(url):
     req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 EchoPod/1.0","Accept":"*/*"})
     with urllib.request.urlopen(req,timeout=14) as res:return res.read(8000000)
@@ -34,7 +35,8 @@ def parse(raw):
                 link=e.get("url",""); fmt=e.get("type","")
                 if link.startswith("https://") and fmt in ("text/vtt","application/x-subrip","application/srt","text/plain"):
                     transcripts.append({"url":link,"type":fmt,"language":e.get("language","")})
-        if url and url.startswith("https://"):output.append({"title":local(item,"title"),"date":local(item,"pubDate"),"audio":url,"description":re.sub("<[^>]+>"," ",local(item,"description"))[:260],"transcripts":transcripts})
+        duration=local(item,"duration")
+        if url and url.startswith("https://"):output.append({"duration":duration,"title":local(item,"title"),"date":local(item,"pubDate"),"audio":url,"description":re.sub("<[^>]+>"," ",local(item,"description"))[:260],"transcripts":transcripts})
     return output
 def episodes(i):
     errors=[]; feed=FEEDS.get(i)
@@ -118,11 +120,22 @@ def ai_transcribe(show, episode):
     cache_key="groq:"+audio
     existing=CACHE.get(cache_key)
     if existing:return existing[1]
-    today=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-    for day in list(AI_DAILY):
-        if day != today:AI_DAILY.pop(day,None)
-    if AI_DAILY.get(today,0)>=3:raise RuntimeError("Daily transcription limit reached (3)")
-    AI_DAILY[today]=AI_DAILY.get(today,0)+1
+    def duration_minutes(s):
+        try:
+            parts=[int(x) for x in str(s).split(":")]
+            if len(parts)==1:return max(1,math.ceil(parts[0]/60))
+            if len(parts)==2:return max(1,math.ceil((parts[0]*60+parts[1])/60))
+            if len(parts)==3:return max(1,math.ceil((parts[0]*3600+parts[1]*60+parts[2])/60))
+        except (ValueError,TypeError):pass
+        return 60
+    minutes=duration_minutes(item.get("duration",""))
+    day=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    with AI_LOCK:
+        stats=AI_DAILY.setdefault(day,{"minutes":0,"requests":0})
+        if stats["minutes"]+minutes>480:raise RuntimeError("Daily audio budget reached (480 minutes)")
+        if stats["requests"]>=2000:raise RuntimeError("Daily request limit reached (2000)")
+        stats["minutes"]+=minutes
+        stats["requests"]+=1
     fields={"model":"whisper-large-v3-turbo","response_format":"verbose_json","timestamp_granularities[]":"segment","url":audio}
     boundary="EchoPodBoundary86532"
     body=b"".join(("--"+boundary+"\r\nContent-Disposition: form-data; name=\""+k+"\"\r\n\r\n"+v+"\r\n").encode() for k,v in fields.items())+("--"+boundary+"--\r\n").encode()
@@ -130,8 +143,12 @@ def ai_transcribe(show, episode):
     try:
         with urllib.request.urlopen(req,timeout=115) as response:result=json.loads(response.read(2000000))
     except urllib.error.HTTPError as e:
+        with AI_LOCK:stats["minutes"]-=minutes
         detail=e.read(1500).decode("utf-8","replace")
         raise RuntimeError("Groq API rejected this audio ("+str(e.code)+"). It may exceed the free-tier audio limit. "+detail[:250])
+    except Exception:
+        with AI_LOCK:stats["minutes"]-=minutes
+        raise
     segments=[{"start":s.get("start",0),"end":s.get("end",0),"text":s.get("text","")} for s in result.get("segments",[]) if isinstance(s,dict)]
     output={"segments":segments,"text":result.get("text",""),"show":show,"episode":episode}
     CACHE[cache_key]=(time.time(),output)
