@@ -119,7 +119,16 @@ def resolved_audio_url(url):
         with urllib.request.urlopen(req,timeout=15) as resp:return resp.geturl()
 
 def upload_audio_request(url, key):
-    import imageio_ffmpeg
+    import shutil, sys
+    ffmpeg=shutil.which("ffmpeg")
+    if not ffmpeg:
+        try:
+            import imageio_ffmpeg
+        except ImportError:
+            subprocess.run([sys.executable,"-m","pip","install","--quiet","--target","/tmp/echopod_ffmpeg","imageio-ffmpeg"],check=True,timeout=120)
+            sys.path.insert(0,"/tmp/echopod_ffmpeg")
+            import imageio_ffmpeg
+        ffmpeg=imageio_ffmpeg.get_ffmpeg_exe()
     boundary="EchoPodFileBoundary86532"
     fields={"model":"whisper-large-v3-turbo","response_format":"verbose_json","timestamp_granularities[]":"segment"}
     with tempfile.TemporaryDirectory() as folder:
@@ -136,15 +145,15 @@ def upload_audio_request(url, key):
                 out.write(chunk)
         file_path=source
         if total>24*1024*1024:
-            cmd=[imageio_ffmpeg.get_ffmpeg_exe(),"-nostdin","-loglevel","error","-y","-i",source,"-vn","-ac","1","-ar","16000","-codec:a","libmp3lame","-b:a","32k",compressed]
+            cmd=[ffmpeg,"-nostdin","-loglevel","error","-y","-i",source,"-vn","-ac","1","-ar","16000","-codec:a","libmp3lame","-b:a","32k",compressed]
             result=subprocess.run(cmd,capture_output=True,timeout=105)
             if result.returncode!=0:raise RuntimeError("Audio compression failed: "+result.stderr.decode("utf-8","replace")[:220])
             file_path=compressed
         if os.path.getsize(file_path)>24*1024*1024:raise RuntimeError("Compressed episode still over 24 MB; segmenting needed")
         with open(file_path,"rb") as source_file:data=source_file.read()
-    parts=[("--"+boundary+"\\r\\nContent-Disposition: form-data; name=\\\""+k+"\\\"\\r\\n\\r\\n"+v+"\\r\\n").encode() for k,v in fields.items()]
-    parts.append(("--"+boundary+"\\r\\nContent-Disposition: form-data; name=\\\"file\\\"; filename=\\\"podcast.mp3\\\"\\r\\nContent-Type: audio/mpeg\\r\\n\\r\\n").encode()+data+b"\\r\\n")
-    parts.append(("--"+boundary+"--\\r\\n").encode())
+    parts=[("--"+boundary+"\r\nContent-Disposition: form-data; name=\\""+k+"\\"\r\n\r\n"+v+"\r\n").encode() for k,v in fields.items()]
+    parts.append(("--"+boundary+"\r\nContent-Disposition: form-data; name=\\"file\\"; filename=\\"podcast.mp3\\"\r\nContent-Type: audio/mpeg\r\n\r\n").encode()+data+b"\r\n")
+    parts.append(("--"+boundary+"--\r\n").encode())
     request=urllib.request.Request("https://api.groq.com/openai/v1/audio/transcriptions",data=b"".join(parts),headers={"Authorization":"Bearer "+key,"Content-Type":"multipart/form-data; boundary="+boundary},method="POST")
     with urllib.request.urlopen(request,timeout=115) as response:return json.loads(response.read(2000000))
 
