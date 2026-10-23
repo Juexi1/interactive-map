@@ -92,15 +92,42 @@ body{background:radial-gradient(ellipse at 70% -15%,#26383e 0%,#0b141a 43%,#090e
 #playerOverlay .barline{display:flex;align-items:center;justify-content:space-between;gap:12px}
 @media(max-width:600px){#playerShell{padding:14px 22px 50px}#playerArtwork{width:min(63vw,270px)}#lyricsView{max-height:41vh}body{padding-bottom:80px}}
 #albumPage{animation:albumEnter .25s ease}#albumPage .focus{margin-top:3px}#albumPage .sectionhead{margin-top:27px!important}@keyframes albumEnter{from{opacity:.4;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}body.album-mode .hero,body.album-mode #grid,body.album-mode .library-heading{display:none!important}body.album-mode #albumPage{display:block!important}@media(max-width:600px){.shell{padding-top:max(28px,env(safe-area-inset-top))!important}.top{padding-top:10px}#albumPage .focus{display:flex;flex-direction:column;align-items:center;text-align:center}#albumPage .focus-cover{height:190px;width:190px;border-radius:18px;box-shadow:0 18px 35px #0008}#albumPage .focus h3{font-size:29px}}
+
+/* Refined transitions and accessible bold controls */
+:root{--ease-smooth:cubic-bezier(.22,1,.36,1)}
+#albumPage{animation:albumSlide .44s var(--ease-smooth) both}
+@keyframes albumSlide{from{opacity:0;transform:translate3d(28px,0,0) scale(.985)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+#grid .tile{transition:transform .32s var(--ease-smooth),filter .25s ease}
+#grid .tile:active{transform:scale(.96)}
+#playerOverlay{display:block!important;visibility:hidden;opacity:0;pointer-events:none;transform:translate3d(0,42px,0) scale(.985);transition:opacity .32s ease,transform .48s var(--ease-smooth),visibility 0s linear .48s;will-change:transform,opacity}
+#playerOverlay.open{visibility:visible;opacity:1;pointer-events:auto;transform:translate3d(0,0,0) scale(1);transition:opacity .28s ease,transform .45s var(--ease-smooth),visibility 0s}
+#playerArtwork{transition:transform .45s var(--ease-smooth)}
+#playerOverlay.open #playerArtwork{animation:coverRise .55s var(--ease-smooth) both}
+@keyframes coverRise{from{transform:translateY(17px) scale(.94);opacity:.5}to{transform:translateY(0) scale(1);opacity:1}}
+#miniPlay,#fullPlay,#closePlayer,#playerControls button{display:inline-flex;align-items:center;justify-content:center;transition:transform .15s ease,background .2s}
+#miniPlay:active,#fullPlay:active,#closePlayer:active,#playerControls button:active{transform:scale(.88)}
+#miniPlay{width:46px;height:46px;min-width:46px;border-radius:50%;background:#ffffff12;font-size:0}
+#fullPlay{width:80px;height:80px;border-radius:50%;background:#fff!important;color:#13171d!important;font-size:0!important;box-shadow:0 8px 28px #0005}
+#closePlayer{background:#ffffff25;width:46px;height:46px}
+#playerControls button:not(#fullPlay){background:#ffffff12;border-radius:50%;min-width:58px;min-height:58px;font-weight:800;font-size:20px}
+#miniPlay svg{width:23px;height:23px}#fullPlay svg{width:35px;height:35px}#closePlayer svg{width:24px;height:24px}
+#playerProgress{height:7px;cursor:pointer}
+#lyricsView .lyric{transition:color .28s ease,transform .28s var(--ease-smooth);transform-origin:left center}
+#lyricsView .lyric.current{transform:scale(1.035)}
+@media(prefers-reduced-motion:reduce){#playerOverlay,#albumPage,#playerArtwork,.tile,.lyric{animation:none!important;transition:none!important}}
 </style></head><body><main class="shell"><header class="top"><div class="logo">echo<span>pod.</span></div><div class="topright"><span class="dot"></span>YOUR DAILY LISTEN</div></header><section class="hero"><div><div class="eyebrow">DISCOVER · LISTEN · REPEAT</div><h1>Good morning.<br>Great listening.</h1><p>Discover the world's most talked-about podcasts. Fresh perspectives, brilliant conversations, and stories worth your time.</p></div><button class="pill" onclick="morning()">▶ &nbsp; Start morning listen</button></section><div class="sectionhead library-heading"><h2>Global Top 10 + Morning Picks</h2><span class="subtle">Curated chart snapshot ↗</span></div><div id="grid" class="grid"></div><section id="albumPage" style="display:none"><button id="albumBack" onclick="closeAlbum()" style="border:0;background:#ffffff15;color:#fff;padding:11px 17px;border-radius:999px;margin:8px 0 25px;font-weight:700">‹ Back to Library</button><div class="sectionhead"><h2>Now exploring</h2><span id="loading" class="subtle">Select a podcast</span></div><section class="focus"><img id="focusArt" class="focus-cover" alt="Podcast cover"><div><div class="eyebrow">FEATURED PODCAST</div><h3 id="focusName">The Daily</h3><p id="focusDesc">Latest episodes and stories, ready to play.</p><div class="subtle" id="count"></div></div></section><div class="sectionhead" style="margin-top:36px"><h2>Latest episodes</h2><span class="subtle">PLAY ANY EPISODE</span></div><div id="episodes"></div></section><p class="subtle" style="margin-top:30px">Podcast artwork is provided by publishers and directory listings. <a style="color:var(--mint)" href="/api/diagnostics" target="_blank">Connection diagnostics</a></p></main><footer class="footer"><div id="minibar" onclick="openPlayer()"><img id="miniArt" alt="Now playing album cover"><div style="min-width:0;flex:1"><div id="miniTitle">Select an episode</div><div id="miniShow">EchoPod · Ready to listen</div></div><button id="miniPlay" onclick="event.stopPropagation();togglePlayback()" aria-label="Play or pause">▶</button><span style="color:#c7cbd0;font-size:20px">⌃</span></div><audio id="audio" controls playsinline preload="none" style="display:none"></audio><span id="playing" style="display:none"></span><span id="captionText" style="display:none">Choose an episode</span><button id="generateBtn" style="display:none"></button><button id="captionBtn" style="display:none"></button><button id="transcriptBtn" style="display:none"></button><div id="transcriptPanel" style="display:none"><div id="transcriptLines"></div></div></footer><div id="playerOverlay" role="dialog" aria-label="Now Playing"><div id="playerShell"><div class="barline"><button id="closePlayer" onclick="closePlayer()" aria-label="Close player">⌄</button><div style="font-size:12px;font-weight:750;letter-spacing:2px">NOW PLAYING</div><span style="width:42px"></span></div><img id="playerArtwork" alt="Podcast album artwork"><div id="playerHeading">Choose an episode</div><div id="playerShow">EchoPod</div><input id="playerProgress" type="range" min="0" max="100" value="0" oninput="seekPlayback(this.value)" aria-label="Playback position"><div class="barline" style="color:#aeb8c2;font-size:12px"><span id="elapsed">0:00</span><span id="duration">0:00</span></div><div id="playerControls"><button onclick="skipAudio(-15)" aria-label="Back 15 seconds">↶15</button><button id="fullPlay" onclick="togglePlayback()" aria-label="Play or pause">▶</button><button onclick="skipAudio(30)" aria-label="Forward 30 seconds">30↷</button></div><div class="barline" style="margin:4px 0 14px"><div><div style="font-weight:800;font-size:18px">Lyrics & Captions</div><div id="fullCaptionStatus">Synchronized podcast transcript</div></div><button id="fullGenerate" onclick="generateAI()">Generate AI subtitles</button></div><div id="lyricsView"><div class="placeholder">Select an episode to see captions. Tap “Generate AI subtitles” if the publisher did not provide them.</div></div></div></div><script>
 
 const names=__SHOWS__;const types=['Business · Interviews','Conversation · Culture','History','Daily News','Self Improvement','Comedy · Interviews','True Crime','True Crime · News','Conversations','Comedy · Interviews','Daily News · NPR','Business & Tech · 中文'];let art=names.map(()=>''), links=names.map(()=>''),chosen=3, latest=[], selectionToken=0, allEpisodes=Array(names.length).fill(null), allPromise=null;
 const $=id=>document.getElementById(id);
+
+const iconPlay='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 4.5c0-1.1 1.2-1.8 2.2-1.2l11 7c1.2.8 1.2 2.6 0 3.4l-11 7C9.2 21.3 8 20.6 8 19.5z"/></svg>';
+const iconPause='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="3" width="5.5" height="18" rx="1.4"/><rect x="13.5" y="3" width="5.5" height="18" rx="1.4"/></svg>';
+const iconDown='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 9 7 7 7-7"/></svg>';
 let playerShown=false,currentPlayingTitle='',currentPlayingShow='';
 function openPlayer(){playerShown=true;$('playerOverlay').classList.add('open');document.body.style.overflow='hidden';refreshLyrics()}
 function closePlayer(){playerShown=false;$('playerOverlay').classList.remove('open');document.body.style.overflow=''}
 function togglePlayback(){const a=$('audio');if(!a.src)return;if(a.paused)a.play().catch(()=>{});else a.pause();syncButtons()}
-function syncButtons(){const v=$('audio').paused?'▶':'Ⅱ';$('miniPlay').textContent=v;$('fullPlay').textContent=v}
+function syncButtons(){const v=$('audio').paused?iconPlay:iconPause;$('miniPlay').innerHTML=v;$('fullPlay').innerHTML=v}
 function skipAudio(seconds){const a=$('audio');a.currentTime=Math.max(0,Math.min(a.duration||Infinity,a.currentTime+seconds))}
 function seekPlayback(pct){const a=$('audio');if(a.duration)a.currentTime=Number(pct)*a.duration/100}
 function fmtTime(t){if(!Number.isFinite(t))return '0:00';return Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0')}
@@ -110,7 +137,7 @@ function syncLyrics(){if(!playerShown||!activeCues.length)return;const t=$('audi
 $('audio').addEventListener('play',syncButtons);$('audio').addEventListener('pause',syncButtons);
 $('audio').addEventListener('timeupdate',()=>{const a=$('audio');$('elapsed').textContent=fmtTime(a.currentTime);$('duration').textContent=fmtTime(a.duration);$('playerProgress').value=a.duration?100*a.currentTime/a.duration:0;syncLyrics()});
 $('audio').addEventListener('loadedmetadata',()=>{$('duration').textContent=fmtTime($('audio').duration)});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&playerShown)closePlayer()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&playerShown)closePlayer()});syncButtons();$('closePlayer').innerHTML=iconDown;
 
 
 const CACHE_KEY='echopod-v5-local-cache';
