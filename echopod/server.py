@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 NAMES=["The Diary of a CEO","The Joe Rogan Experience","The Rest Is History","The Daily","The Mel Robbins Podcast","Good Hang with Amy Poehler","Crime Junkie","Dateline NBC","The Shawn Ryan Show","This Past Weekend with Theo Von","Up First from NPR","声动早咖啡"]
-FEEDS={0:"https://rss2.flightcast.com/xmsftuzjjykcmqwolaqn6mdn",2:"https://feeds.megaphone.fm/GLT4787413333",3:"https://feeds.simplecast.com/Sl5CSM3S",4:"https://feeds.simplecast.com/UCwaTX1J",6:"https://feeds.simplecast.com/qm_9xx0g",9:"https://feeds.megaphone.fm/thispastweekend",10:"https://feeds.npr.org/510318/podcast.xml",11:"https://feeds.fireside.fm/sheng-espresso/rss"}
+FEEDS={0:"https://rss2.flightcast.com/xmsftuzjjykcmqwolaqn6mdn",2:"https://feeds.megaphone.fm/GLT4787413333",3:"https://feeds.simplecast.com/Sl5CSM3S",4:"https://feeds.simplecast.com/UCwaTX1J",6:"https://feeds.simplecast.com/qm_9xx0g",9:"https://feeds.megaphone.fm/thispastweekend",10:"https://feeds.npr.org/510318/podcast.xml",11:"https://www.ximalaya.com/album/51076156.xml"}
 CACHE={}
 AI_DAILY={}
 AI_LOCK=threading.Lock()
@@ -58,7 +58,7 @@ def episodes(i):
         except Exception as e:errors.append("Podcast directory: "+str(e))
     if feed:
         try:
-            out=cache("rss-v2:"+feed,lambda:parse(fetch(feed),newest_first=(i==11)))
+            out=cache("rss-v3:"+feed,lambda:parse(fetch(feed),newest_first=(i==11)))
             if out:return {"episodes":out,"feed":feed,"errors":errors}
             errors.append("RSS contained no playable audio")
         except Exception as e:errors.append("RSS: "+str(e))
@@ -210,7 +210,7 @@ $('audio').addEventListener('loadedmetadata',()=>{$('duration').textContent=fmtT
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&playerShown)closePlayer()});syncButtons();$('closePlayer').innerHTML=iconDown;
 
 
-const CACHE_KEY='echopod-v5-local-cache';
+const CACHE_KEY='echopod-v6-local-cache';
 function saveLocal(){try{localStorage.setItem(CACHE_KEY,JSON.stringify({art,links,allEpisodes,updated:Date.now()}))}catch(e){}}
 function restoreLocal(){try{const d=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');if(!d)return false;if(Array.isArray(d.art)&&d.art.length===names.length)art=d.art;if(Array.isArray(d.links)&&d.links.length===names.length)links=d.links;if(Array.isArray(d.allEpisodes)&&d.allEpisodes.length===names.length)allEpisodes=d.allEpisodes;return true}catch(e){return false}}
 function refreshCoverNodes(){if(activeShow!==null&&art[activeShow]){$('miniArt').src=art[activeShow];$('miniArt').style.display='block';$('miniFallback').style.display='none';$('playerArtwork').src=art[activeShow]}document.querySelectorAll('#grid .tile').forEach((tile,i)=>{if(!art[i])return;const img=tile.querySelector('img.art');if(img&&img.getAttribute('src')!==art[i]){img.src=art[i];img.style.display='block';const fallback=tile.querySelector('.faux');if(fallback)fallback.remove()}});setFocus()}
