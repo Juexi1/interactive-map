@@ -10,7 +10,10 @@ AI_DAILY={}
 AI_LOCK=threading.Lock()
 def fetch(url):
     req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 EchoPod/1.0","Accept":"*/*"})
-    with urllib.request.urlopen(req,timeout=14) as res:return res.read(8000000)
+    with urllib.request.urlopen(req,timeout=30) as res:
+        data=res.read(48*1024*1024+1)
+        if len(data)>48*1024*1024:raise ValueError("RSS feed exceeds 48 MB; cannot parse complete XML")
+        return data
 def cache(k,fn):
     old=CACHE.get(k)
     if old and time.time()-old[0]<3600:return old[1]
@@ -58,7 +61,7 @@ def episodes(i):
         except Exception as e:errors.append("Podcast directory: "+str(e))
     if feed:
         try:
-            out=cache("rss-v3:"+feed,lambda:parse(fetch(feed),newest_first=(i==11)))
+            out=cache("rss-v4:"+feed,lambda:parse(fetch(feed),newest_first=(i==11)))
             if out:return {"episodes":out,"feed":feed,"errors":errors}
             errors.append("RSS contained no playable audio")
         except Exception as e:errors.append("RSS: "+str(e))
