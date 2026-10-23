@@ -1,5 +1,5 @@
 import os, json, re, time, urllib.request, urllib.parse, urllib.error, xml.etree.ElementTree as ET
-import hmac, datetime, threading, math, tempfile, subprocess
+import hmac, datetime, threading, math, tempfile, subprocess, email.utils
 from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -19,9 +19,17 @@ def local(el,tag):
     for c in el:
         if c.tag.split("}")[-1].lower()==tag.lower():return (c.text or "").strip()
     return ""
-def parse(raw):
+def parse(raw, newest_first=False):
     root=ET.fromstring(raw)
     items=root.findall("./channel/item")
+    if newest_first:
+        def published(item):
+            try:
+                parsed=email.utils.parsedate_to_datetime(local(item,"pubDate"))
+                return parsed.timestamp()
+            except (ValueError,TypeError,OverflowError):
+                return 0
+        items.sort(key=published,reverse=True)
     output=[]
     for item in items[:35]:
         url=""
@@ -50,7 +58,7 @@ def episodes(i):
         except Exception as e:errors.append("Podcast directory: "+str(e))
     if feed:
         try:
-            out=cache(feed,lambda:parse(fetch(feed)))
+            out=cache("rss-v2:"+feed,lambda:parse(fetch(feed),newest_first=(i==11)))
             if out:return {"episodes":out,"feed":feed,"errors":errors}
             errors.append("RSS contained no playable audio")
         except Exception as e:errors.append("RSS: "+str(e))
