@@ -125,7 +125,7 @@ def ai_transcribe(show, episode):
     AI_DAILY[today]=AI_DAILY.get(today,0)+1
     fields={"model":"whisper-large-v3-turbo","response_format":"verbose_json","timestamp_granularities[]":"segment","url":audio}
     boundary="EchoPodBoundary86532"
-    body=b"".join(("--"+boundary+"\\r\\nContent-Disposition: form-data; name=\\""+k+"\\"\\r\\n\\r\\n"+v+"\\r\\n").encode() for k,v in fields.items())+("--"+boundary+"--\\r\\n").encode()
+    body=b"".join(("--"+boundary+"\r\nContent-Disposition: form-data; name=\""+k+"\"\r\n\r\n"+v+"\r\n").encode() for k,v in fields.items())+("--"+boundary+"--\r\n").encode()
     req=urllib.request.Request("https://api.groq.com/openai/v1/audio/transcriptions",data=body,headers={"Authorization":"Bearer "+key,"Content-Type":"multipart/form-data; boundary="+boundary,"User-Agent":"EchoPod/1.0"},method="POST")
     try:
         with urllib.request.urlopen(req,timeout=115) as response:result=json.loads(response.read(2000000))
