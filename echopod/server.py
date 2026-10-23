@@ -109,6 +109,30 @@ def covers():
     return cache("covers_v3",obtain)
 
 
+
+def resolved_audio_url(url):
+    req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 EchoPod/1.0","Accept":"*/*"},method="HEAD")
+    try:
+        with urllib.request.urlopen(req,timeout=15) as resp:return resp.geturl()
+    except Exception:
+        req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 EchoPod/1.0","Range":"bytes=0-0"})
+        with urllib.request.urlopen(req,timeout=15) as resp:return resp.geturl()
+
+def upload_audio_request(url, key):
+    req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 EchoPod/1.0"})
+    with urllib.request.urlopen(req,timeout=50) as resp:
+        size=int(resp.headers.get("Content-Length","0") or 0)
+        if size>24*1024*1024:raise RuntimeError("Audio exceeds the 24 MB safe upload limit; long episodes require compression or splitting.")
+        data=resp.read(24*1024*1024+1)
+    if len(data)>24*1024*1024:raise RuntimeError("Audio exceeds the 24 MB safe upload limit; long episodes require compression or splitting.")
+    boundary="EchoPodFileBoundary86532"
+    fields={"model":"whisper-large-v3-turbo","response_format":"verbose_json","timestamp_granularities[]":"segment"}
+    parts=[("--"+boundary+"\r\nContent-Disposition: form-data; name=\""+k+"\"\r\n\r\n"+v+"\r\n").encode() for k,v in fields.items()]
+    parts.append(("--"+boundary+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\"podcast.mp3\"\r\nContent-Type: audio/mpeg\r\n\r\n").encode()+data+b"\r\n")
+    parts.append(("--"+boundary+"--\r\n").encode())
+    request=urllib.request.Request("https://api.groq.com/openai/v1/audio/transcriptions",data=b"".join(parts),headers={"Authorization":"Bearer "+key,"Content-Type":"multipart/form-data; boundary="+boundary},method="POST")
+    with urllib.request.urlopen(request,timeout=115) as response:return json.loads(response.read(2000000))
+
 def ai_transcribe(show, episode):
     if not (0 <= show < len(NAMES) and 0 <= episode < 35):raise ValueError("Invalid episode")
     key=os.environ.get("GROQ_API_KEY","")
@@ -136,12 +160,18 @@ def ai_transcribe(show, episode):
         if stats["requests"]>=2000:raise RuntimeError("Daily request limit reached (2000)")
         stats["minutes"]+=minutes
         stats["requests"]+=1
-    fields={"model":"whisper-large-v3-turbo","response_format":"verbose_json","timestamp_granularities[]":"segment","url":audio}
+    final_audio=resolved_audio_url(audio)
+    fields={"model":"whisper-large-v3-turbo","response_format":"verbose_json","timestamp_granularities[]":"segment","url":final_audio}
     boundary="EchoPodBoundary86532"
     body=b"".join(("--"+boundary+"\r\nContent-Disposition: form-data; name=\""+k+"\"\r\n\r\n"+v+"\r\n").encode() for k,v in fields.items())+("--"+boundary+"--\r\n").encode()
     req=urllib.request.Request("https://api.groq.com/openai/v1/audio/transcriptions",data=body,headers={"Authorization":"Bearer "+key,"Content-Type":"multipart/form-data; boundary="+boundary,"User-Agent":"EchoPod/1.0"},method="POST")
     try:
-        with urllib.request.urlopen(req,timeout=115) as response:result=json.loads(response.read(2000000))
+        try:
+            with urllib.request.urlopen(req,timeout=115) as response:result=json.loads(response.read(2000000))
+        except urllib.error.HTTPError as e:
+            msg=e.read(1200).decode("utf-8","replace")
+            if e.code==400 and ("302" in msg or "media_fetch_failed" in msg):result=upload_audio_request(audio,key)
+            else:raise RuntimeError("Groq API error "+str(e.code)+": "+msg[:260])
     except urllib.error.HTTPError as e:
         with AI_LOCK:stats["minutes"]-=minutes
         detail=e.read(1500).decode("utf-8","replace")
