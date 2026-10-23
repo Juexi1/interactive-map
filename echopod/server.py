@@ -154,7 +154,7 @@ def upload_audio_request(url, key):
     parts=[('--'+boundary+'\r\nContent-Disposition: form-data; name="'+k+'"\r\n\r\n'+v+'\r\n').encode() for k,v in fields.items()]
     parts.append(('--'+boundary+'\r\nContent-Disposition: form-data; name="file"; filename="podcast.mp3"\r\nContent-Type: audio/mpeg\r\n\r\n').encode()+data+b'\r\n')
     parts.append(("--"+boundary+"--\r\n").encode())
-    request=urllib.request.Request("https://api.groq.com/openai/v1/audio/transcriptions",data=b"".join(parts),headers={"Authorization":"Bearer "+key,"Content-Type":"multipart/form-data; boundary="+boundary},method="POST")
+    request=urllib.request.Request("https://api.groq.com/openai/v1/audio/transcriptions",data=b"".join(parts),headers={"Authorization":"Bearer "+key,"Content-Type":"multipart/form-data; boundary="+boundary,"User-Agent":"EchoPod/1.0"},method="POST")
     with urllib.request.urlopen(request,timeout=115) as response:return json.loads(response.read(2000000))
 
 def ai_transcribe(show, episode):
