@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M3U8 Video Downloader</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#0d1322;color:#eef3ff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;padding:24px}.panel{width:min(780px,100%);background:#172237;border:1px solid #32415f;border-radius:24px;padding:32px;box-shadow:0 25px 60px #0004}h1{margin:0 0 5px;font-size:28px}.muted{color:#9fb0cc}label{display:block;margin:28px 0 10px;font-weight:600}input{width:100%;font:inherit;padding:16px;border:1px solid #485979;border-radius:12px;background:#0e1829;color:#fff}.buttons{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}button{font:inherit;font-weight:600;border:0;border-radius:12px;padding:14px 24px;cursor:pointer;color:white;background:#2563eb}button.secondary{background:#344966}button:disabled{opacity:.6;cursor:wait}video{width:100%;background:#000;border-radius:12px;margin-top:24px;max-height:340px}#status{margin:20px 0 0;color:#c9d7ed;white-space:pre-wrap}.tip{font-size:13px;color:#a2b0ca;margin-top:20px}
+</style></head>
+<body><main class="panel"><div class="muted">STREAM TO MP4 · RENDER EDITION</div><h1>视频播放与下载</h1><p class="muted">输入 M3U8 视频链接，在云端合并为 MP4 后直接保存。</p><label for="url">M3U8 视频地址</label><input id="url" type="url" value="{{ default_url }}" spellcheck="false"><div class="buttons"><button id="download">下载 MP4</button><button class="secondary" id="play">尝试播放</button></div><div id="status" role="status">已填入视频地址，可直接尝试下载。</div><video controls playsinline id="video"></video><p class="tip">仅限当前预设来源。源站可能有访问限制，下载失败不代表视频文件不存在。仅下载你有权保存的视频。</p></main>
+<script>
+const url=document.querySelector('#url'),status=document.querySelector('#status'),video=document.querySelector('#video'),download=document.querySelector('#download');
+document.querySelector('#play').onclick=()=>{video.src=url.value.trim();video.play().catch(()=>{status.textContent='浏览器不支持直接播放或来源站点限制访问。'});};
+download.onclick=async()=>{
+ download.disabled=true;status.textContent='正在从服务器下载和合并视频，请保持页面打开…';
+ try{
+  const r=await fetch('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url.value.trim()})});
+  if(!r.ok){let e=await r.json().catch(()=>({}));throw Error(e.error||('请求失败 HTTP '+r.status))}
+  if(!r.body)throw Error('浏览器不支持流式下载');
+  const reader=r.body.getReader();let parts=[],received=0;
+  while(true){const {done,value}=await reader.read();if(done)break;parts.push(value);received+=value.length;status.textContent='已接收 '+(received/1048576).toFixed(1)+' MB（合并中）';}
+  if(received===0)throw Error('源站未返回视频内容');
+  const blob=new Blob(parts,{type:'video/mp4'});const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='video.mp4';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),60000);status.textContent='已生成 MP4：'+(received/1048576).toFixed(1)+' MB';
+ }catch(e){status.textContent='下载失败：'+e.message+'。源站可能无法访问或不允许服务器读取。';}finally{download.disabled=false}
+};
+</script></body></html>
